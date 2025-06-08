@@ -1,25 +1,26 @@
 "use server";
 
-import { headers } from "next/headers"
 import { redirect } from "next/navigation";
 
 import { db } from "@/db";
 import { userProfiles } from "@/db/schema";
-import { auth } from "@/lib/auth"
+import { protectedActionClient } from "@/lib/next-safe-action";
+import z from "zod";
 
-export const createProfile = async (whatsapp: string) => {
-    const session = await auth.api.getSession({
-        headers: await headers(),
-    });
+const updateProfileSchema = z.object({
+  whatsapp: z.string().trim().min(1, { message: "Whatsapp é obrigatório" }),
+});
 
-    if (!session?.user) {
-        throw new Error("Unauthorized");
-    }
-
-    await db.insert(userProfiles).values({
-        userId: session.user.id,
-        whatsapp: whatsapp
-    }).returning();
+export const createProfile = protectedActionClient
+  .inputSchema(updateProfileSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    await db
+      .insert(userProfiles)
+      .values({
+        userId: ctx.user.id,
+        whatsapp: parsedInput.whatsapp,
+      })
+      .returning();
 
     redirect("/dashboard");
-}
+  });

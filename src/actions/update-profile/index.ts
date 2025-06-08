@@ -1,24 +1,24 @@
 "use server";
 
-import { headers } from "next/headers"
 import { db } from "@/db";
 import { userProfiles } from "@/db/schema";
-import { auth } from "@/lib/auth"
-import { eq } from "drizzle-orm";
+import z from "zod";
+import { protectedActionClient } from "@/lib/next-safe-action";
+import { redirect } from "next/navigation";
 
-export const updateProfile = async (whatsapp: string) => {
-    const session = await auth.api.getSession({
-        headers: await headers(),
-    });
+const updateProfileSchema = z.object({
+  whatsapp: z.string().trim().min(1, { message: "Whatsapp é obrigatório" }),
+});
 
-    if (!session?.user) {
-        throw new Error("Unauthorized");
-    }
-
-    await db.update(userProfiles)
-        .set({ whatsapp })
-        .where(eq(userProfiles.userId, session.user.id))
-        .returning();
-
-    return { success: true };
-} 
+export const updateProfile = protectedActionClient
+  .inputSchema(updateProfileSchema)
+  .action(async ({ ctx, parsedInput }) => {
+    await db
+      .insert(userProfiles)
+      .values({
+        userId: ctx.user.id,
+        whatsapp: parsedInput.whatsapp,
+      })
+      .returning();
+    redirect("/dashboard");
+  });
